@@ -12,8 +12,11 @@
 	<string>This app requires access to motion data to provide real-time sensor information.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-	   <key>NSAllowsArbitraryLoads</key><true/>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>App requires local network access to stream sensor data.</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
