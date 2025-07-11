@@ -30,7 +30,15 @@ class _IpInputScreenState extends State<IpInputScreen> {
   bool _isConnecting = false;
 
   Future<void> _connect() async {
-    if (_controller.text.isEmpty) {
+    final ip = _controller.text.trim();
+
+    if (ip.isEmpty || !RegExp(r'^(\d{1,3}\.){3}\d{1,3}$').hasMatch(ip)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid IP address'),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
 
@@ -39,16 +47,13 @@ class _IpInputScreenState extends State<IpInputScreen> {
     });
 
     try {
-      // **Attempt to connect**
-      final channel = IOWebSocketChannel.connect(
-        Uri.parse('ws://${_controller.text}:8765'),
-        connectTimeout: const Duration(seconds: 5), // Add a timeout
-      );
+      // Manually timeout the connection after 5 seconds
+      final channel = await Future
+          .timeout(const Duration(seconds: 5), () {
+        return IOWebSocketChannel.connect('ws://$ip:8765');
+      });
 
-      // **Wait for the connection to be ready**
-      await channel.ready;
-
-      // **If successful, navigate to the next screen**
+      // Navigate if connected
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -57,7 +62,7 @@ class _IpInputScreenState extends State<IpInputScreen> {
         );
       }
     } catch (e) {
-      // **If connection fails, show an error message**
+      // Display timeout or other error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -67,7 +72,6 @@ class _IpInputScreenState extends State<IpInputScreen> {
         );
       }
     } finally {
-      // **Reset the loading state**
       if (mounted) {
         setState(() {
           _isConnecting = false;
@@ -94,7 +98,7 @@ class _IpInputScreenState extends State<IpInputScreen> {
                 hintText: 'e.g., 192.168.0.107',
                 border: OutlineInputBorder(),
               ),
-              keyboardType: TextInputType.number,
+              keyboardType: TextInputType.text, // Fix: allow dots
             ),
             const SizedBox(height: 20),
             _isConnecting
@@ -109,7 +113,6 @@ class _IpInputScreenState extends State<IpInputScreen> {
     );
   }
 }
-
 
 class SensorStreamScreen extends StatefulWidget {
   final IOWebSocketChannel channel;
@@ -126,12 +129,12 @@ class _SensorStreamScreenState extends State<SensorStreamScreen> {
   @override
   void initState() {
     super.initState();
-    // Start listening to sensor events and sending data on the provided channel
-    _accelerometerSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
+
+    _accelerometerSubscription = accelerometerEvents.listen((event) {
       widget.channel.sink.add('A,${event.x},${event.y},${event.z}');
     });
 
-    _gyroscopeSubscription = gyroscopeEvents.listen((GyroscopeEvent event) {
+    _gyroscopeSubscription = gyroscopeEvents.listen((event) {
       widget.channel.sink.add('G,${event.x},${event.y},${event.z}');
     });
   }
