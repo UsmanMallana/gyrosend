@@ -18,9 +18,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Screen for user to input the server IP address
 class IpInputScreen extends StatefulWidget {
-  const IpInputScreen({super.key});
+  const IpInputScreen({Key? key}) : super(key: key);
 
   @override
   _IpInputScreenState createState() => _IpInputScreenState();
@@ -28,6 +27,54 @@ class IpInputScreen extends StatefulWidget {
 
 class _IpInputScreenState extends State<IpInputScreen> {
   final TextEditingController _controller = TextEditingController();
+  bool _isConnecting = false;
+
+  Future<void> _connect() async {
+    if (_controller.text.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isConnecting = true;
+    });
+
+    try {
+      // **Attempt to connect**
+      final channel = IOWebSocketChannel.connect(
+        Uri.parse('ws://${_controller.text}:8765'),
+        connectTimeout: const Duration(seconds: 5), // Add a timeout
+      );
+
+      // **Wait for the connection to be ready**
+      await channel.ready;
+
+      // **If successful, navigate to the next screen**
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => SensorStreamScreen(channel: channel),
+          ),
+        );
+      }
+    } catch (e) {
+      // **If connection fails, show an error message**
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Connection Failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      // **Reset the loading state**
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,24 +91,18 @@ class _IpInputScreenState extends State<IpInputScreen> {
               controller: _controller,
               decoration: const InputDecoration(
                 labelText: 'Enter Server IP Address',
-                hintText: 'e.g., 192.168.1.10',
+                hintText: 'e.g., 192.168.0.107',
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                if (_controller.text.isNotEmpty) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => SensorStreamScreen(ipAddress: _controller.text),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Connect and Stream Data'),
-            ),
+            _isConnecting
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                    onPressed: _connect,
+                    child: const Text('Connect and Stream Data'),
+                  ),
           ],
         ),
       ),
@@ -69,33 +110,29 @@ class _IpInputScreenState extends State<IpInputScreen> {
   }
 }
 
-// Screen to stream sensor data
+
 class SensorStreamScreen extends StatefulWidget {
-  final String ipAddress;
-  const SensorStreamScreen({super.key, required this.ipAddress});
+  final IOWebSocketChannel channel;
+  const SensorStreamScreen({Key? key, required this.channel}) : super(key: key);
 
   @override
   _SensorStreamScreenState createState() => _SensorStreamScreenState();
 }
 
 class _SensorStreamScreenState extends State<SensorStreamScreen> {
-  late final IOWebSocketChannel channel;
   StreamSubscription? _accelerometerSubscription;
   StreamSubscription? _gyroscopeSubscription;
 
   @override
   void initState() {
     super.initState();
-    // Establish WebSocket connection with the user-provided IP
-    channel = IOWebSocketChannel.connect('ws://${widget.ipAddress}:8765');
-
-    // Start listening to sensor events and sending data
+    // Start listening to sensor events and sending data on the provided channel
     _accelerometerSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
-      channel.sink.add('A,${event.x},${event.y},${event.z}');
+      widget.channel.sink.add('A,${event.x},${event.y},${event.z}');
     });
 
     _gyroscopeSubscription = gyroscopeEvents.listen((GyroscopeEvent event) {
-      channel.sink.add('G,${event.x},${event.y},${event.z}');
+      widget.channel.sink.add('G,${event.x},${event.y},${event.z}');
     });
   }
 
@@ -106,17 +143,23 @@ class _SensorStreamScreenState extends State<SensorStreamScreen> {
         title: const Text('Sensor Stream'),
       ),
       body: const Center(
-        child: Text('✅ Streaming sensor data...'),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 60),
+            SizedBox(height: 16),
+            Text('✅ Connected! Streaming sensor data...'),
+          ],
+        ),
       ),
     );
   }
 
   @override
   void dispose() {
-    // Cancel the streams and close the connection
     _accelerometerSubscription?.cancel();
     _gyroscopeSubscription?.cancel();
-    channel.sink.close();
+    widget.channel.sink.close();
     super.dispose();
   }
 }
