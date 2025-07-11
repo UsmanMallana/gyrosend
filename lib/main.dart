@@ -31,7 +31,7 @@ class _IpInputScreenState extends State<IpInputScreen> {
 
   Future<void> _connect() async {
     final ip = _controller.text.trim();
-
+  
     if (ip.isEmpty || !RegExp(r'^(\d{1,3}\.){3}\d{1,3}$').hasMatch(ip)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -41,19 +41,16 @@ class _IpInputScreenState extends State<IpInputScreen> {
       );
       return;
     }
-
+  
     setState(() {
       _isConnecting = true;
     });
-
+  
     try {
-      // Manually timeout the connection after 5 seconds
-      final channel = await Future
-          .timeout(const Duration(seconds: 5), () {
-        return IOWebSocketChannel.connect('ws://$ip:8765');
-      });
-
-      // Navigate if connected
+      final channel = await IOWebSocketChannel.connect(
+        Uri.parse('ws://$ip:8765'),
+      ).timeout(const Duration(seconds: 5));
+  
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -62,7 +59,6 @@ class _IpInputScreenState extends State<IpInputScreen> {
         );
       }
     } catch (e) {
-      // Display timeout or other error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
